@@ -19,8 +19,8 @@ class ContactController extends Controller
     public function index(Request $request)
     {
         // Import automatic if empty
-        if(Contact::count() == 0 && file_exists(public_path('contacts.csv'))) {
-             $this->contactService->import(public_path('contacts.csv'));
+        if (Contact::count() == 0 && file_exists(public_path('contacts.csv'))) {
+            $this->contactService->import(public_path('contacts.csv'));
         }
 
         $contacts = $this->contactService->getContacts($request);
@@ -32,6 +32,18 @@ class ContactController extends Controller
     public function store(Request $request)
     {
         $this->contactService->storeContact($request->all());
+        return redirect()->back();
+    }
+
+    public function update(Request $request, $id)
+    {
+        $this->contactService->updateContact($id, $request->all());
+        return redirect()->back();
+    }
+
+    public function destroy($id)
+    {
+        $this->contactService->deleteContact($id);
         return redirect()->back();
     }
 }
