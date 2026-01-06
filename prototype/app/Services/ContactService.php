@@ -5,71 +5,46 @@ use App\Models\City;
 
 class ContactService
 {
-
-    // 1. هادي كتجمع البحث والفلتر بجوج
+    /**
+     * Retrieve contacts with optional search (first/last name) and city filtering.
+     */
     public function getContacts($request)
     {
         return Contact::with('cities')
-            ->when($request->search, function ($q) use ($request) {
-                $q->where('first_name', 'like', '%' . $request->search . '%')
-                    ->orWhere('last_name', 'like', '%' . $request->search . '%');
-            })
-            ->when($request->city_id, function ($q) use ($request) {
-                $q->whereHas('cities', fn($c) => $c->where('id', $request->city_id));
-            })
+            ->when($request->search, fn($q) => $q->where('first_name', 'like', "%$request->search%")->orWhere('last_name', 'like', "%$request->search%"))
+            ->when($request->city_id, fn($q) => $q->whereHas('cities', fn($c) => $c->where('id', $request->city_id)))
             ->get();
     }
 
-    // 2. هادي ديال الإضافة (Modal)
-    public function storeContact($data)
+    /**
+     * Create or update a contact record.
+     * Handles synchronizing city relationships and photo uploads.
+     */
+    public function save($data, $id = null)
     {
-        $contact = Contact::create($data); // سجل المعلومات
+        $contact = $id ? Contact::findOrFail($id) : new Contact;
+        $contact->fill($data)->save();
 
-        if (isset($data['cities'])) {
-            $contact->cities()->attach($data['cities']); // ربط المدن
-        }
-
-        // كود التصويرة (اختياري إلا بقا الوقت)
-        if (isset($data['photo'])) {
-            $path = $data['photo']->store('uploads', 'public');
-            $contact->update(['photo' => $path]);
-        }
+        if (isset($data['cities']))
+            $contact->cities()->sync($data['cities']);
+        if (isset($data['photo']))
+            $contact->update(['photo' => $data['photo']->store('uploads', 'public')]);
     }
 
-    // 3. هادي Import CSV (ديرها باش تعمر الداتا)
+    /**
+     * Import contacts and their cities from a CSV file.
+     */
     public function import($path)
     {
-        if (!file_exists($path))
+        if (!file_exists($path) || !($file = fopen($path, 'r')))
             return;
-        $file = fopen($path, 'r');
-        fgetcsv($file); // Skip Header
+
+        fgetcsv($file); // Skip header
+
         while (($row = fgetcsv($file)) !== FALSE) {
             $city = City::firstOrCreate(['name' => $row[4]]);
-            $contact = Contact::create(['first_name' => $row[0], 'last_name' => $row[1], 'email' => $row[2], 'phone' => $row[3]]);
-            $contact->cities()->attach($city->id);
+            Contact::create(['first_name' => $row[0], 'last_name' => $row[1], 'email' => $row[2], 'phone' => $row[3]])
+                ->cities()->attach($city->id);
         }
-    }
-
-    // 4. هادي ديال التعديل
-    public function updateContact($id, $data)
-    {
-        $contact = Contact::findOrFail($id);
-        $contact->update($data);
-
-        if (isset($data['cities'])) {
-            $contact->cities()->sync($data['cities']); // تحديث المدن
-        }
-
-        if (isset($data['photo'])) {
-            $path = $data['photo']->store('uploads', 'public');
-            $contact->update(['photo' => $path]);
-        }
-    }
-
-    // 5. هادي ديال الحذف
-    public function deleteContact($id)
-    {
-        $contact = Contact::findOrFail($id);
-        $contact->delete();
     }
 }

@@ -4,46 +4,57 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use App\Models\City;
-use App\Models\Contact; // زيد هادي
+use App\Models\Contact;
 use App\Services\ContactService;
 
 class ContactController extends Controller
 {
-    protected $contactService;
-
-    public function __construct(ContactService $contactService)
+    // Inject ContactService for business logic
+    public function __construct(protected ContactService $service)
     {
-        $this->contactService = $contactService;
     }
 
+    /**
+     * Display the contact list with filtering and search.
+     * Also handles automatic CSV import if the database is empty.
+     */
     public function index(Request $request)
     {
-        // Import automatic if empty
-        if (Contact::count() == 0 && file_exists(public_path('contacts.csv'))) {
-            $this->contactService->import(public_path('contacts.csv'));
+        // Check if there are no contacts and a CSV exists to import initial data
+        if (Contact::count() == 0 && file_exists($path = public_path('contacts.csv'))) {
+            $this->service->import($path);
         }
 
-        $contacts = $this->contactService->getContacts($request);
-        $cities = City::all();
-
-        return view('index', compact('contacts', 'cities'));
+        return view('index', [
+            'contacts' => $this->service->getContacts($request),
+            'cities' => City::all()
+        ]);
     }
 
+    /**
+     * Store a newly created contact.
+     */
     public function store(Request $request)
     {
-        $this->contactService->storeContact($request->all());
-        return redirect()->back();
+        $this->service->save($request->all());
+        return back();
     }
 
+    /**
+     * Update an existing contact.
+     */
     public function update(Request $request, $id)
     {
-        $this->contactService->updateContact($id, $request->all());
-        return redirect()->back();
+        $this->service->save($request->all(), $id);
+        return back();
     }
 
+    /**
+     * Delete a contact.
+     */
     public function destroy($id)
     {
-        $this->contactService->deleteContact($id);
-        return redirect()->back();
+        Contact::destroy($id);
+        return back();
     }
 }
